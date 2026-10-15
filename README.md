@@ -18,7 +18,7 @@ Public status page for Backrooms: is it down, or is it just you?
 ## Machine setup
 `~/.config/backrooms-status/` holds `check.py` (copied from `checker/`), `config`, `deploy_key` (a write deploy key
 for this repo only) and `repo/` (scratch clone). Config keys: `ROLE`, `HOST`, `REPO`, `DEPLOY_KEY`, `FRONT`, `MAIN`,
-`BACKUP`, `DB_PORT`, `CF_TOKEN_FILE`.
+`BACKUP`, `DB_PORT`, `CF_TOKEN_FILE`, `CF_ACCOUNT`.
 
 ## Try the page locally
 `python3 fixtures/make.py && python3 -m http.server 8765`, then open

@@ -25,7 +25,6 @@ EVERY_S = 120
 BACKUP_AFTER_S = 360
 DAYS_KEPT = 90
 CAP = 100_000
-ACCOUNT = "3d8f29f10b0600ebcf2167c7942ae3d5"
 
 # Order = display order on the page.
 COMPONENTS = [
@@ -82,7 +81,7 @@ def probe_db(port):
     return "down"
 
 
-def probe_capacity(token_file):
+def probe_capacity(token_file, account):
     """Requests counted against the daily cap so far (UTC day, which is when Cloudflare resets it)."""
     try:
         with open(os.path.expanduser(token_file)) as f:
@@ -91,7 +90,7 @@ def probe_capacity(token_file):
         q = (
             '{viewer{accounts(filter:{accountTag:"%s"}){'
             'pagesFunctionsInvocationsAdaptiveGroups(limit:100,filter:{date_geq:"%s"}){sum{requests}}'
-            'workersInvocationsAdaptive(limit:100,filter:{date_geq:"%s"}){sum{requests}}}}}' % (ACCOUNT, day, day)
+            'workersInvocationsAdaptive(limit:100,filter:{date_geq:"%s"}){sum{requests}}}}}' % (account, day, day)
         )
         req = urllib.request.Request(
             "https://api.cloudflare.com/client/v4/graphql",
@@ -131,13 +130,19 @@ def summarise(c):
     return "up", "", "Everything is working."
 
 
-def git(repo, *args, check=True):
-    return subprocess.run(["git", "-C", repo, *args], check=check, capture_output=True, text=True).stdout.strip()
+def git(repo, *args):
+    """Run git with a time limit (a hung push would stop launchd from starting the next check) and put git's own
+    error in the log when it fails."""
+    r = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, timeout=90)
+    if r.returncode:
+        raise SystemExit("git %s failed (%d): %s" % (args[0], r.returncode, r.stderr.strip()))
+    return r.stdout.strip()
 
 
 def ensure_repo(conf):
     repo = os.path.join(CONF_DIR, "repo")
-    env_ssh = "ssh -i %s -o IdentitiesOnly=yes -o BatchMode=yes" % os.path.expanduser(conf["DEPLOY_KEY"])
+    env_ssh = "ssh -i %s -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15" % (
+        os.path.expanduser(conf["DEPLOY_KEY"]))
     os.environ["GIT_SSH_COMMAND"] = env_ssh
     if not os.path.isdir(os.path.join(repo, ".git")):
         subprocess.run(["git", "init", "-q", repo], check=True)
@@ -148,13 +153,16 @@ def ensure_repo(conf):
 
 
 def read_remote(repo):
-    """Latest status.json from the data branch, or None when the branch doesn't exist yet."""
-    if subprocess.run(["git", "-C", repo, "fetch", "-q", "--depth=1", "origin", "data"], capture_output=True).returncode:
-        return None
-    try:
-        return json.loads(git(repo, "show", "FETCH_HEAD:status.json"))
-    except Exception:
-        return None
+    """Latest status.json from the data branch; {} only when the branch truly doesn't exist yet. Any other failure
+    exits without publishing, so a network blip can never overwrite 90 days of history with one check."""
+    r = subprocess.run(["git", "-C", repo, "ls-remote", "--exit-code", "origin", "refs/heads/data"],
+                       capture_output=True, text=True, timeout=90)
+    if r.returncode == 2:
+        return {}
+    if r.returncode:
+        raise SystemExit("can't reach the status repo (%d): %s" % (r.returncode, r.stderr.strip()))
+    git(repo, "fetch", "-q", "--depth=1", "origin", "data")
+    return json.loads(git(repo, "show", "FETCH_HEAD:status.json"))
 
 
 def publish(repo, data):
@@ -163,10 +171,7 @@ def publish(repo, data):
         json.dump(data, f, separators=(",", ":"))
     git(repo, "add", "status.json")
     tree = git(repo, "write-tree")
-    commit = subprocess.run(
-        ["git", "-C", repo, "commit-tree", tree, "-m", "status " + data["updated"]],
-        check=True, capture_output=True, text=True,
-    ).stdout.strip()
+    commit = git(repo, "commit-tree", tree, "-m", "status " + data["updated"])
     git(repo, "push", "-q", "-f", "origin", commit + ":refs/heads/data")
 
 
@@ -191,9 +196,10 @@ def record(data, now, comps, overall, title, message, used):
         if open_inc is None:
             open_inc = {"start": iso, "end": None, "worst": overall, "parts": [], "title": title}
             incidents.append(open_inc)
+        if overall == "down" or open_inc["worst"] != "down":
+            open_inc["title"] = title  # follow the current cause, but never let a "down" title fall back to "degraded"
         if overall == "down":
             open_inc["worst"] = "down"
-            open_inc["title"] = title
         open_inc["parts"] = sorted(set(open_inc["parts"]) | {k for k, s in comps.items() if s in ("down", "degraded")})
         open_inc["last"] = iso
     elif open_inc is not None:
@@ -226,7 +232,7 @@ def main():
         if age < BACKUP_AFTER_S:
             return  # the primary checker is alive
 
-    cap_state, used = probe_capacity(conf["CF_TOKEN_FILE"])
+    cap_state, used = probe_capacity(conf["CF_TOKEN_FILE"], conf["CF_ACCOUNT"])
     comps = {
         "website": probe_http(conf["FRONT"] + "/sw.js"),
         "main": probe_http(conf["MAIN"] + "/api/version"),

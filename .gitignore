@@ -1,3 +1,6 @@
 .DS_Store
 fixtures/shots/
 fixtures/server.log
+__pycache__/
+fixtures/*.json
+.wrangler/

@@ -178,7 +178,8 @@
 
   const dayKey = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
   const fmtDay = (key) => new Date(key + "T12:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-  const fmtTime = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  // Times use the same Central clock as the day headings, with the zone shown ("9:48 AM CDT").
+  const fmtTime = (iso) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ, timeZoneName: "short" });
   const ago = (iso) => {
     const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
     if (s < 90) return "just now";
@@ -194,9 +195,11 @@
   let data = null, state = "unknown", you = null;
 
   function lastDays(n) {
+    // Step by calendar day from today's Central date (24-hour steps skip or repeat a day around DST changes).
+    const [y, m, d] = dayKey(new Date()).split("-").map(Number);
     const out = [];
-    for (let i = n - 1; i >= 0; i--) out.push(dayKey(new Date(Date.now() - i * 86400000)));
-    return [...new Set(out)];
+    for (let i = n - 1; i >= 0; i--) out.push(new Date(Date.UTC(y, m - 1, d - i, 12)).toISOString().slice(0, 10));
+    return out;
   }
 
   function renderHero() {
@@ -293,7 +296,7 @@
         row.insertBefore(m, bars);
         row.insertBefore(h("div", { class: "scale" },
           h("span", { text: used.toLocaleString() + " of " + cap.toLocaleString() + " used today" }),
-          h("span", { text: "Resets " + new Date(new Date().setUTCHours(24, 0, 0, 0)).toLocaleTimeString(undefined, { hour: "numeric" }) })), bars);
+          h("span", { text: "Resets " + new Date(new Date().setUTCHours(24, 0, 0, 0)).toLocaleTimeString("en-US", { hour: "numeric", timeZone: TZ, timeZoneName: "short" }) })), bars);
       }
       box.append(row);
     }
