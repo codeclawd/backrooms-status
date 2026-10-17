@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Backrooms status checker.
 
-launchd runs this every 2 minutes on the MacBook Pro (role "primary") and on the Mac mini (role "backup", which only
-acts when the data has gone quiet for 6 minutes, i.e. the MacBook is off). It never sends a request through the
-Cloudflare Pages Function (100k/day free cap): it fetches one static file from Cloudflare's CDN, asks each server's
-Tailscale Funnel directly, knocks on the database port, and reads today's request count from Cloudflare's analytics
-API. The result is status.json on the `data` branch of the public status repo, which the status page reads.
+launchd runs this every 2 minutes on the Mac mini (role "primary"; a machine with role "backup" only acts when the
+data has gone quiet for 6 minutes). Backrooms runs on Railway, so the checker sits outside it: it asks the app's
+/api/version (and times it), the database through /api/health, and whether the old pages.dev address still forwards
+people to the new one. The result is status.json on the `data` branch of the public status repo, which the page reads.
 
-Stdlib only; must run on the MacBook's /usr/bin/python3 (3.9).
+Stdlib only; must run on macOS's /usr/bin/python3 (3.9).
 """
 import json
 import os
-import socket
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -24,15 +24,14 @@ TZ = ZoneInfo("America/Chicago")  # day buckets follow the school's clock
 EVERY_S = 120
 BACKUP_AFTER_S = 360
 DAYS_KEPT = 90
-CAP = 100_000
+LATENCY_KEPT = 120  # last 4 hours of response times, for the page's sparkline
+SLOW_MS = 2500
 
 # Order = display order on the page.
 COMPONENTS = [
-    ("website", "Website", "Loading the app from Cloudflare"),
-    ("main", "Main server", "Chat, accounts and messages"),
-    ("backup", "Backup server", "Takes over if the main server stops"),
+    ("app", "Backrooms app", "Chat, accounts and messages"),
     ("database", "Database", "Where messages and accounts are stored"),
-    ("capacity", "Daily capacity", "Cloudflare's free limit of 100,000 requests a day"),
+    ("redirect", "Old address", "backrooms-1k7.pages.dev sends you to the new one"),
 ]
 
 
@@ -47,86 +46,80 @@ def load_conf():
     return conf
 
 
-def http_ok(url, timeout=10):
-    req = urllib.request.Request(url, headers={"User-Agent": "backrooms-status/1", "Cache-Control": "no-cache"})
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
+
+
+_plain = urllib.request.build_opener(_NoRedirect)
+
+
+def fetch(url, timeout=10):
+    """(status, body, ms, location). Redirects are not followed, so the old address can be checked for one.
+    status is 0 when nothing answered."""
+    req = urllib.request.Request(url, headers={"User-Agent": "backrooms-status/2", "Cache-Control": "no-cache"})
+    t = time.monotonic()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as res:
-            return res.status == 200
+        with _plain.open(req, timeout=timeout) as res:
+            return res.status, res.read(4096), round((time.monotonic() - t) * 1000), res.headers.get("Location")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read(4096), round((time.monotonic() - t) * 1000), e.headers.get("Location")
     except Exception:
-        return False
+        return 0, b"", None, None
 
 
-def probe_http(url):
-    """Two tries 5 s apart, so one dropped packet isn't an outage."""
-    if http_ok(url):
-        return "up"
-    time.sleep(5)
-    return "up" if http_ok(url) else "down"
-
-
-def probe_db(port):
-    """Postgres answers an SSLRequest with one byte, 'S' or 'N'. Through the MacBook's ssh tunnel this proves the
-    tunnel AND the database on the Mac mini are alive; a bare TCP connect would only prove the tunnel listens."""
+def probe_app(app):
+    """The app answers /api/version with the live build id. Two tries 5 s apart, so one dropped packet isn't an
+    outage. Returns (state, ms, version)."""
     for attempt in range(2):
+        status, body, ms, _ = fetch(app + "/api/version")
         try:
-            with socket.create_connection(("127.0.0.1", int(port)), timeout=5) as s:
-                s.settimeout(5)
-                s.sendall(b"\x00\x00\x00\x08\x04\xd2\x16\x2f")
-                if s.recv(1) in (b"S", b"N"):
-                    return "up"
-        except Exception:
-            pass
+            version = json.loads(body).get("version") if status == 200 else None
+        except ValueError:
+            version = None
+        if version:
+            return ("degraded" if ms > SLOW_MS else "up"), ms, version
+        if attempt == 0:
+            time.sleep(5)
+    return "down", None, None
+
+
+def probe_db(app):
+    """/api/health runs `select 1` on the database. A 404 means the route isn't deployed yet: unknown, not down."""
+    for attempt in range(2):
+        status, body, _, _ = fetch(app + "/api/health")
+        if status == 404:
+            return None
+        if status == 200 and b'"up"' in body:
+            return "up"
         if attempt == 0:
             time.sleep(5)
     return "down"
 
 
-def probe_capacity(token_file, account):
-    """Requests counted against the daily cap so far (UTC day, which is when Cloudflare resets it)."""
-    try:
-        with open(os.path.expanduser(token_file)) as f:
-            token = f.read().strip()
-        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        q = (
-            '{viewer{accounts(filter:{accountTag:"%s"}){'
-            'pagesFunctionsInvocationsAdaptiveGroups(limit:100,filter:{date_geq:"%s"}){sum{requests}}'
-            'workersInvocationsAdaptive(limit:100,filter:{date_geq:"%s"}){sum{requests}}}}}' % (account, day, day)
-        )
-        req = urllib.request.Request(
-            "https://api.cloudflare.com/client/v4/graphql",
-            data=json.dumps({"query": q}).encode(),
-            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=20) as res:
-            body = json.load(res)
-        acct = body["data"]["viewer"]["accounts"][0]
-        used = sum(g["sum"]["requests"] for k in acct for g in acct[k] or [])
-    except Exception as e:
-        print("capacity check failed:", e, file=sys.stderr)
-        return None, None
-    state = "down" if used >= CAP else "degraded" if used >= CAP * 0.85 else "up"
-    return state, used
+def probe_redirect(old, app):
+    """The old pages.dev address should answer with a redirect to the app's address."""
+    host = urllib.parse.urlparse(app).netloc
+    for attempt in range(2):
+        status, _, _, loc = fetch(old + "/")
+        if 300 <= status < 400 and loc and urllib.parse.urlparse(loc).netloc == host:
+            return "up"
+        if attempt == 0:
+            time.sleep(5)
+    return "down"
 
 
 def summarise(c):
     """Overall state, a short incident title, and the sentence the page shows at the top."""
-    if c["website"] == "down":
-        return "down", "Website not loading", "Backrooms isn't loading right now."
-    if c["capacity"] == "down":
-        # The cap resets at 00:00 UTC: 7 pm Central in summer time, 6 pm in winter.
-        reset = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(TZ)
-        return "down", "Daily limit reached", (
-            "Backrooms hit Cloudflare's daily limit. It comes back at %d pm Central." % (reset.hour - 12))
-    if c["main"] == "down" and c["backup"] == "down":
-        return "down", "Both servers down", "Both servers are down. Backrooms isn't working right now."
+    if c["app"] == "down":
+        return "down", "Backrooms not loading", "Backrooms isn't loading right now."
     if c["database"] == "down":
         return "down", "Database down", "The database isn't answering. Messages and sign-in won't work."
-    if c["main"] == "down":
-        return "degraded", "Main server down", "The main server is down. The backup server is running Backrooms."
-    if c["capacity"] == "degraded":
-        return "degraded", "Close to the daily limit", "Backrooms is close to Cloudflare's daily limit."
-    if c["backup"] == "down":
-        return "degraded", "Backup server offline", "Backrooms is working. The backup server is offline."
+    if c["app"] == "degraded":
+        return "degraded", "Running slow", "Backrooms is up but slow right now."
+    if c["redirect"] == "down":
+        return "degraded", "Old address not forwarding", (
+            "Backrooms is working. The old pages.dev link isn't forwarding, so open the new address.")
     return "up", "", "Everything is working."
 
 
@@ -175,7 +168,7 @@ def publish(repo, data):
     git(repo, "push", "-q", "-f", "origin", commit + ":refs/heads/data")
 
 
-def record(data, now, comps, overall, title, message, used):
+def record(data, now, comps, overall, title, message, ms=None, version=None):
     iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     day = now.astimezone(TZ).strftime("%Y-%m-%d")
 
@@ -183,7 +176,7 @@ def record(data, now, comps, overall, title, message, used):
     d = days.setdefault(day, {})
     for key, state in comps.items():
         if state is None:
-            continue  # unknown (e.g. analytics API hiccup): don't count it either way
+            continue  # unknown (e.g. /api/health not deployed yet): don't count it either way
         ok, total = d.get(key, [0, 0])
         d[key] = [ok + (state != "down"), total + 1]
     for old in sorted(days)[:-DAYS_KEPT]:
@@ -214,9 +207,27 @@ def record(data, now, comps, overall, title, message, used):
         overall=overall,
         message=message,
         components=[{"key": k, "name": n, "about": a, "state": comps[k]} for k, n, a in COMPONENTS],
-        capacity={"used": used, "cap": CAP},
     )
+    # Response times for the sparkline: [unix seconds, ms or null when the app didn't answer].
+    data["latency"] = (data.get("latency") or [])[-(LATENCY_KEPT - 1):] + [[int(now.timestamp()), ms]]
+    # The live build and when it first showed up, so the page can say when the last update shipped. A build seen
+    # for the first time with no earlier one to compare (a fresh start) takes its merge time from GitHub instead.
+    if version and version != data.get("version"):
+        data["version_since"] = iso if data.get("version") else (merged_at(version) or iso)
+        data["version"] = version
+    data.setdefault("since", iso)  # when checks began, for the page's clean-streak counter
     return data
+
+
+def merged_at(sha):
+    """Commit time of a build on the private app repo, through the Mac's logged-in gh; None if that fails."""
+    try:
+        r = subprocess.run(["/opt/homebrew/bin/gh", "api", "repos/codeclawd/backrooms/commits/" + sha,
+                            "-q", ".commit.committer.date"], capture_output=True, text=True, timeout=20)
+        out = r.stdout.strip()
+        return out if r.returncode == 0 and out.endswith("Z") else None
+    except Exception:
+        return None
 
 
 def main():
@@ -224,6 +235,8 @@ def main():
     conf = load_conf()
     repo = None if dry else ensure_repo(conf)
     data = (read_remote(repo) if repo else None) or {}
+    if "--reset" in sys.argv or "capacity" in data:
+        data = {}  # history from the Mac-hosted days (servers, Cloudflare's cap) doesn't describe Railway
 
     now = datetime.now(timezone.utc)
     if conf.get("ROLE") == "backup" and data.get("updated") and data.get("checker") != conf["HOST"]:
@@ -232,19 +245,17 @@ def main():
         if age < BACKUP_AFTER_S:
             return  # the primary checker is alive
 
-    cap_state, used = probe_capacity(conf["CF_TOKEN_FILE"], conf["CF_ACCOUNT"])
+    app_state, ms, version = probe_app(conf["APP"])
     comps = {
-        "website": probe_http(conf["FRONT"] + "/sw.js"),
-        "main": probe_http(conf["MAIN"] + "/api/version"),
-        "backup": probe_http(conf["BACKUP"] + "/api/version"),
-        "database": probe_db(conf["DB_PORT"]),
-        "capacity": cap_state,
+        "app": app_state,
+        "database": probe_db(conf["APP"]) if app_state != "down" else "down",
+        "redirect": probe_redirect(conf["OLD"], conf["APP"]),
     }
     overall, title, message = summarise(comps)
-    data = record(data, now, comps, overall, title, message, used)
+    data = record(data, now, comps, overall, title, message, ms, version)
     data["checker"] = conf["HOST"]
     if dry:
-        print(json.dumps({k: data[k] for k in ("overall", "message", "components", "capacity")}, indent=1))
+        print(json.dumps({k: data.get(k) for k in ("overall", "message", "components", "latency", "version", "version_since")}, indent=1))
         return
     publish(repo, data)
 

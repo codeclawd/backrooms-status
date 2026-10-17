@@ -2,150 +2,258 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Backrooms Status</title>
 <meta name="description" content="Is Backrooms down, or is it just you? Live status, checked every 2 minutes.">
-<meta name="color-scheme" content="light dark">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23346538'/%3E%3C/svg%3E">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#131312" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e8e7e2" media="(prefers-color-scheme: light)">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="preload" href="fonts/big-shoulders-800.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  /* The app's own fonts (Backrooms' wheatpaste wall), self-hosted. */
+  @font-face { font-family: "Big Shoulders"; font-weight: 100 900; font-display: swap; src: url(fonts/big-shoulders-800.woff2) format("woff2"); }
+  @font-face { font-family: "Big Shoulders Stencil"; font-weight: 800; font-display: swap; src: url(fonts/big-shoulders-stencil-800.woff) format("woff"); }
+  @font-face { font-family: "Permanent Marker"; font-weight: 400; font-display: swap; src: url(fonts/permanent-marker-400.woff2) format("woff2"); }
+  @font-face { font-family: "Martian Mono"; font-weight: 100 800; font-display: swap; src: url(fonts/martian-mono-400.woff2) format("woff2"); }
+  @font-face { font-family: "Schibsted Grotesk"; font-weight: 400 900; font-display: swap; src: url(fonts/schibsted-grotesk-400.woff2) format("woff2"); }
+
+  /* Materials from the app's globals.css: asphalt ground, newsprint paper, ink, Riso pink. */
   :root {
-    --bg: #fbfbfa; --card: #fff; --line: #eaeaea; --ink: #2f3437; --mute: #787774; --soft: #f7f6f3;
-    --up: #6aa874; --up-bg: #edf3ec; --up-ink: #346538;
-    --warn: #d6a43a; --warn-bg: #fbf3db; --warn-ink: #956400;
-    --down: #cf5b55; --down-bg: #fdebec; --down-ink: #9f2f2d;
-    --none: #e6e5e1; --none-bg: #f1f0ec; --none-ink: #5f5e5b;
-    --sans: -apple-system, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
-    --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
-    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    --ground: #131312; --slab: #1f1f1d; --grit: #2c2c29; --chalk: #b8b4a9; --wall-ink: #ecebe6;
+    --paper: #e2dfd6; --paper-2: #d6d2c6; --ink: #101010; --ink-soft: #49453d;
+    --pink: #f45d96; --pink-deep: #c93a73; --blue: #2a3cc4;
+    --up: #2f9e55; --up-ink: #1d6b38; --warn: #d39a2a; --warn-ink: #8a5a00; --down: #d6455d; --down-ink: #a3203a;
+    --none: #c3beb1; --live: #3ecf5e;
+    --poster: "Big Shoulders", "Arial Narrow", sans-serif;
+    --stencil: "Big Shoulders Stencil", "Big Shoulders", sans-serif;
+    --marker: "Permanent Marker", cursive;
+    --mono: "Martian Mono", ui-monospace, monospace;
+    --ui: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --shadow: 0 1px 0 rgb(0 0 0 / .25), 0 14px 30px -12px rgb(0 0 0 / .65);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #151515; --card: #1c1c1c; --line: #2c2c2c; --ink: #ececea; --mute: #9b9a97; --soft: #222;
-      --up: #5c9b67; --up-bg: #1f2b21; --up-ink: #9fd0a6;
-      --warn: #c99a35; --warn-bg: #2e2716; --warn-ink: #e6c27a;
-      --down: #cc5a54; --down-bg: #301c1c; --down-ink: #f0a19c;
-      --none: #333; --none-bg: #262626; --none-ink: #a5a4a1;
-    }
+  @media (prefers-color-scheme: light) {
+    /* Whitewash wall: the ground and wall text flip, paper stays paper. */
+    :root { --ground: #e8e7e2; --slab: #dcdad3; --grit: #cfccc3; --chalk: #55524a; --wall-ink: #151514;
+            --shadow: 0 1px 0 rgb(40 36 28 / .12), 0 14px 28px -14px rgb(40 36 28 / .45); }
   }
+
   * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); }
-  main { max-width: 52rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  html { -webkit-text-size-adjust: 100%; background: var(--ground); }
+  body { margin: 0; color: var(--wall-ink); font: 16px/1.55 var(--ui); min-height: 100dvh; overflow-x: hidden; }
+  /* Asphalt grain on a fixed layer, so it never repaints while scrolling. */
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .5; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  main { position: relative; z-index: 1; max-width: 56rem; margin: 0 auto; padding: max(1.5rem, env(safe-area-inset-top)) 1.25rem 4rem; }
   a { color: inherit; }
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 2.5rem; }
-  .brand { font: 600 1.05rem/1 var(--sans); letter-spacing: -0.01em; text-decoration: none; }
-  .brand span { color: var(--mute); font-weight: 400; }
-  .open { font-size: .9rem; color: var(--mute); text-decoration: none; border-bottom: 1px solid var(--line); }
-  .open:hover { color: var(--ink); }
+  button { font: inherit; color: inherit; }
 
-  .hero { border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 1.75rem; }
-  .hero-row { display: flex; gap: 1rem; align-items: flex-start; }
-  .hero h1 { margin: 0; font: 500 clamp(1.6rem, 4.5vw, 2.25rem)/1.15 var(--serif); letter-spacing: -0.025em; }
-  .hero .meta { margin: .5rem 0 0; color: var(--mute); font-size: .9rem; }
-  .icon { flex: none; width: 2.25rem; height: 2.25rem; border-radius: 8px; display: grid; place-items: center; margin-top: .1rem; }
-  .icon svg { width: 1.2rem; height: 1.2rem; }
-  .s-up .icon { background: var(--up-bg); color: var(--up-ink); }
-  .s-degraded .icon { background: var(--warn-bg); color: var(--warn-ink); }
-  .s-down .icon { background: var(--down-bg); color: var(--down-ink); }
-  .s-unknown .icon { background: var(--none-bg); color: var(--none-ink); }
+  /* Header */
+  header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2.25rem; }
+  .brand { display: flex; align-items: center; gap: .7rem; text-decoration: none; }
+  .brand img { width: 2.6rem; height: 2.6rem; border-radius: 10px; box-shadow: var(--shadow); transform: rotate(-4deg);
+               transition: transform .5s var(--spring); }
+  .brand:hover img { transform: rotate(4deg) scale(1.06); }
+  .brand b { font: 800 1.7rem/0.9 var(--poster); text-transform: uppercase; letter-spacing: .01em; }
+  .brand small { display: block; font: 400 1rem/1 var(--marker); color: var(--pink); margin-top: .15rem; transform: rotate(-2deg); transform-origin: left; }
+  .open { flex: none; display: inline-flex; align-items: center; gap: .45rem; text-decoration: none; background: var(--pink); color: var(--ink);
+          font: 800 1.05rem/1 var(--poster); text-transform: uppercase; letter-spacing: .04em; padding: .75rem 1.05rem; border-radius: 999px;
+          box-shadow: 0 3px 0 var(--pink-deep); transition: transform .15s var(--ease), box-shadow .15s var(--ease); }
+  .open:hover { transform: translateY(-2px); box-shadow: 0 5px 0 var(--pink-deep); }
+  .open:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--pink-deep); }
+  .open svg { width: 1rem; height: 1rem; }
 
-  .you { margin-top: .75rem; border: 1px solid var(--line); border-radius: 12px; background: var(--card);
-         padding: 1rem 1.25rem; display: grid; grid-template-columns: auto 1fr auto; gap: .75rem; align-items: center; font-size: .95rem; }
-  .you .dot { flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: var(--none); }
-  .you.ok .dot { background: var(--up); } .you.bad .dot { background: var(--down); }
-  .you strong { font-weight: 600; }
-  .you button { font: inherit; font-size: .85rem; color: var(--ink); background: var(--soft);
-                border: 1px solid var(--line); border-radius: 6px; padding: .3rem .7rem; cursor: pointer; }
-  .you button:active { transform: scale(0.98); }
+  /* Paper handbills pasted on the wall */
+  .bill { position: relative; background: var(--paper); color: var(--ink); border-radius: 3px; box-shadow: var(--shadow);
+          background-image: linear-gradient(180deg, rgb(255 255 255 / .35), transparent 40%), radial-gradient(120% 80% at 100% 100%, rgb(120 100 60 / .12), transparent 60%); }
+  .tape { position: absolute; width: 5.5rem; height: 1.6rem; background: rgb(240 236 220 / .55); backdrop-filter: blur(1px);
+          box-shadow: 0 1px 2px rgb(0 0 0 / .15); top: -.75rem; }
+  .tape.l { left: 1.5rem; transform: rotate(-6deg); } .tape.r { right: 1.5rem; transform: rotate(5deg); }
 
-  h2 { font: 600 .75rem/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--mute);
-       margin: 3.25rem 0 1rem; display: flex; justify-content: space-between; }
-  h2 small { font: inherit; letter-spacing: inherit; }
-  .systems { border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-  .sys { padding: 1.25rem 1.5rem; border-top: 1px solid var(--line); }
-  .sys:first-child { border-top: 0; }
-  .sys-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
-  .sys-name { font-weight: 600; }
-  .sys-about { color: var(--mute); font-size: .85rem; }
-  .tag { flex: none; font: 600 .68rem/1 var(--sans); letter-spacing: .06em; text-transform: uppercase;
-         padding: .35rem .6rem; border-radius: 9999px; }
-  .tag.up { background: var(--up-bg); color: var(--up-ink); }
-  .tag.degraded { background: var(--warn-bg); color: var(--warn-ink); }
-  .tag.down { background: var(--down-bg); color: var(--down-ink); }
-  .tag.unknown { background: var(--none-bg); color: var(--none-ink); }
-  .bars { display: flex; gap: 2px; height: 2rem; margin-top: .85rem; }
-  .bar { flex: 1; border-radius: 2px; background: var(--none); border: 0; padding: 0; cursor: default; min-width: 0; }
-  .bar.b-up { background: var(--up); } .bar.b-minor { background: var(--warn); } .bar.b-down { background: var(--down); }
-  .bar:hover, .bar:focus-visible { opacity: .7; outline: none; }
-  .scale { display: flex; justify-content: space-between; color: var(--mute); font-size: .78rem; margin-top: .4rem; }
-  .scale b { font-weight: 500; color: var(--ink); }
-  .meter { margin-top: .85rem; height: .5rem; border-radius: 4px; background: var(--soft); overflow: hidden; border: 1px solid var(--line); }
-  .meter i { display: block; height: 100%; background: var(--up); }
-  .meter.degraded i { background: var(--warn); } .meter.down i { background: var(--down); }
+  .hero { padding: 2rem 1.75rem 1.5rem; transform: rotate(-.6deg); display: grid; grid-template-columns: 1fr minmax(0, 17rem); gap: 1.5rem 2rem; align-items: end; }
+  .stamp { display: inline-flex; align-items: center; gap: .5rem; font: 800 1.15rem/1 var(--stencil); text-transform: uppercase; letter-spacing: .08em;
+           padding: .45rem .8rem .4rem; border: 3px solid currentColor; border-radius: 6px; transform: rotate(-3deg); cursor: pointer; background: none;
+           user-select: none; -webkit-tap-highlight-color: transparent; }
+  .stamp .pulse { width: .7rem; height: .7rem; border-radius: 50%; background: currentColor; position: relative; }
+  .s-up .stamp { color: var(--up-ink); } .s-degraded .stamp { color: var(--warn-ink); }
+  .s-down .stamp { color: var(--down-ink); } .s-unknown .stamp { color: var(--ink-soft); }
+  .hero h1 { margin: 1rem 0 0; font: 800 clamp(2.4rem, 7vw, 4.1rem)/.92 var(--poster); text-transform: uppercase; letter-spacing: -.005em; text-wrap: balance; }
+  .hero h1.long { font-size: clamp(2rem, 5vw, 3rem); }
+  .hero .meta { margin: .9rem 0 0; font: 400 .74rem/1.6 var(--mono); color: var(--ink-soft); }
 
-  .tip { position: fixed; z-index: 5; pointer-events: none; background: var(--ink); color: var(--bg); font-size: .8rem;
-         line-height: 1.4; padding: .45rem .6rem; border-radius: 6px; white-space: nowrap; opacity: 0; transition: opacity .12s; }
-  .tip.on { opacity: 1; }
+  .spark { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; }
+  .spark-top { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+  .spark-ms { font: 400 2.1rem/1 var(--marker); color: var(--ink); white-space: nowrap; }
+  .spark-ms small { font: 400 .95rem var(--marker); color: var(--ink-soft); margin-left: .15rem; }
+  .spark-label { font: 400 .62rem/1.3 var(--mono); color: var(--ink-soft); text-align: right; }
+  .spark svg { width: 100%; height: 5.5rem; display: block; overflow: visible; }
+  .spark .line { fill: none; stroke: var(--pink-deep); stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .spark .area { fill: url(#sparkfill); }
+  .spark .gap { stroke: var(--down); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .spark .base { stroke: rgb(16 16 16 / .15); stroke-dasharray: 2 4; vector-effect: non-scaling-stroke; }
+  .plot { position: relative; margin-top: .4rem; }
+  .plot svg { margin-top: 0; }
+  .dot { position: absolute; width: .6rem; height: .6rem; margin: -.3rem 0 0 -.3rem; border-radius: 50%; background: var(--pink-deep); }
+  .dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--pink-deep); }
 
-  .day { border-top: 1px solid var(--line); padding: 1.1rem 0; }
+  /* Your device */
+  .you { margin: 2.25rem 0 0; display: grid; grid-template-columns: auto 1fr; gap: 1.1rem; align-items: center; }
+  .ping { position: relative; width: 5.25rem; height: 5.25rem; border-radius: 50%; border: 0; cursor: pointer; background: var(--pink); color: var(--ink);
+          font: 800 1.35rem/1 var(--poster); text-transform: uppercase; letter-spacing: .05em; box-shadow: 0 4px 0 var(--pink-deep), 0 10px 24px -8px rgb(244 93 150 / .5);
+          transition: transform .15s var(--ease), box-shadow .15s var(--ease); -webkit-tap-highlight-color: transparent; }
+  .ping:hover { transform: translateY(-2px) rotate(-3deg); }
+  .ping:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--pink-deep); }
+  .ping:disabled { cursor: progress; }
+  .ping .wave { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--pink); pointer-events: none; opacity: 0; }
+  .you-text { font-size: 1rem; color: var(--wall-ink); }
+  .you-text strong { display: block; font: 800 1.45rem/1.05 var(--poster); text-transform: uppercase; letter-spacing: .01em; margin-bottom: .2rem; }
+  .you-text .ms { font-family: var(--marker); font-weight: 400; color: var(--pink); text-transform: none; }
+  .you-text span { color: var(--chalk); }
+
+  /* Stats, chalked on the wall */
+  .stats { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 1rem 2rem; margin: 2.75rem 0 0; padding: 1.25rem 0; border-top: 2px dashed var(--grit); border-bottom: 2px dashed var(--grit); }
+  .stat b { display: block; font: 800 2.6rem/1 var(--poster); letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .stat b .unit { font-size: 1.3rem; margin-left: .2rem; color: var(--chalk); }
+  .stat > span { display: block; margin-top: .35rem; font: 400 .68rem/1.4 var(--mono); color: var(--chalk); }
+  .stat code { font: inherit; color: var(--pink); }
+  @media (prefers-color-scheme: light) { .stat code, .you-text .ms { color: var(--pink-deep); } }
+
+  h2 { margin: 3rem 0 1.1rem; font: 400 1.9rem/1 var(--marker); transform: rotate(-1.2deg); transform-origin: left; }
+  h2 small { font: 400 .7rem var(--mono); color: var(--chalk); margin-left: .6rem; display: inline-block; transform: rotate(1.2deg); }
+
+  .systems { display: grid; gap: 1.1rem; }
+  .sys { padding: 1.15rem 1.3rem 1rem; }
+  .sys:nth-child(odd) { transform: rotate(.35deg); } .sys:nth-child(even) { transform: rotate(-.3deg); }
+  .sys-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+  .sys-name { font: 800 1.5rem/1 var(--poster); text-transform: uppercase; letter-spacing: .01em; }
+  .sys-about { color: var(--ink-soft); font-size: .85rem; margin-top: .25rem; }
+  .tag { flex: none; font: 800 .82rem/1 var(--stencil); letter-spacing: .1em; text-transform: uppercase; padding: .35rem .55rem .3rem; border-radius: 4px; border: 2px solid currentColor; transform: rotate(2deg); }
+  .tag.up { color: var(--up-ink); } .tag.degraded { color: var(--warn-ink); } .tag.down { color: var(--down-ink); } .tag.unknown { color: var(--ink-soft); }
+  .bars { display: flex; gap: 2px; height: 2.25rem; margin-top: 1rem; align-items: stretch; }
+  .bar { flex: 1; min-width: 0; border: 0; padding: 0; border-radius: 2px; background: var(--none); cursor: default; transform-origin: bottom; opacity: .55; }
+  .bar.b-up { background: var(--up); opacity: 1; } .bar.b-minor { background: var(--warn); opacity: 1; } .bar.b-down { background: var(--down); opacity: 1; }
+  .bar:hover, .bar:focus-visible { outline: none; transform: scaleY(1.18); filter: brightness(1.1); }
+  .scale { display: flex; justify-content: space-between; color: var(--ink-soft); font: 400 .64rem/1 var(--mono); margin-top: .55rem; }
+  .scale b { font-weight: 600; color: var(--ink); }
+
+  .tip { position: fixed; z-index: 5; pointer-events: none; background: var(--ink); color: var(--paper); font: 400 .7rem/1.45 var(--mono);
+         padding: .5rem .65rem; border-radius: 6px; white-space: nowrap; opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .12s var(--ease); }
+  .tip.on { opacity: 1; transform: none; }
+
+  /* Incidents */
+  .day { padding: 1rem 0; border-top: 2px dashed var(--grit); }
   .day:first-of-type { border-top: 0; padding-top: 0; }
-  .day h3 { margin: 0 0 .35rem; font: 500 1.05rem/1.3 var(--serif); letter-spacing: -0.01em; }
-  .day p.none { margin: 0; color: var(--mute); font-size: .9rem; }
-  .inc { margin: .6rem 0 0; }
+  .day h3 { margin: 0 0 .3rem; font: 800 1.15rem/1.2 var(--poster); text-transform: uppercase; letter-spacing: .02em; }
+  .day p.none { margin: 0; color: var(--chalk); font-size: .9rem; }
+  .inc { margin: .55rem 0 0; }
   .inc-title { font-weight: 600; display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
-  .inc-when { color: var(--mute); font-size: .85rem; font-family: var(--mono); }
-  .more { font: inherit; font-size: .9rem; color: var(--mute); background: none; border: 0; padding: 0;
-          margin-top: .5rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .inc-title .tag { transform: none; font-size: .7rem; border-width: 1.5px; }
+  .inc .tag.up { color: var(--live); } .inc .tag.down { color: var(--pink); } .inc .tag.degraded { color: var(--warn); }
+  @media (prefers-color-scheme: light) {
+    .inc .tag.up { color: var(--up-ink); } .inc .tag.down { color: var(--down-ink); } .inc .tag.degraded { color: var(--warn-ink); }
+    .tape { background: rgb(255 255 255 / .7); box-shadow: 0 1px 3px rgb(40 36 28 / .25); }
+  }
+  .inc-when { color: var(--chalk); font: 400 .7rem/1.6 var(--mono); }
+  .more { font: 400 1.05rem var(--marker); color: var(--pink); background: none; border: 0; padding: 0; margin-top: .6rem; cursor: pointer; }
 
-  footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--mute); font-size: .82rem; }
-  footer p { margin: 0 0 .4rem; }
+  footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 2px dashed var(--grit); color: var(--chalk); font-size: .82rem; }
+  footer p { margin: 0 0 .45rem; max-width: 62ch; }
 
-  .fade { animation: fade .6s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
-  @keyframes fade { from { opacity: 0; transform: translateY(12px); } }
-  @media (prefers-reduced-motion: reduce) { .fade { animation: none; } }
-  @media (max-width: 520px) {
-    main { padding-top: 1.5rem; }
-    .hero { padding: 1.25rem; }
-    .sys { padding: 1.1rem 1.1rem; }
-    .bars { height: 1.75rem; }
-    .you { grid-template-columns: auto 1fr; align-items: start; }
-    .you .dot { margin-top: .55rem; }
-    .you button { grid-column: 2; justify-self: start; }
+  /* Paint splatter from tapping the stamp */
+  .drop { position: fixed; z-index: 6; pointer-events: none; border-radius: 50%; left: 0; top: 0; }
+
+  @media (max-width: 680px) {
+    main { padding-left: 1rem; padding-right: 1rem; }
+    .open span { display: none; }
+    .open { padding: .75rem; }
+    .hero { grid-template-columns: 1fr; padding: 1.6rem 1.25rem 1.25rem; transform: rotate(-.4deg); }
+    .spark svg { height: 4.5rem; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .stats .stat:first-child { grid-column: 1 / -1; }
+    .sys { padding: 1rem 1rem .9rem; }
+    .bars { height: 2rem; gap: 1.5px; }
+  }
+
+  /* Motion: only when the reader hasn't asked for less. */
+  @media (prefers-reduced-motion: no-preference) {
+    .paste { animation: paste .75s var(--spring) both; animation-delay: calc(var(--i, 0) * 90ms); }
+    @keyframes paste { from { opacity: 0; transform: translateY(18px) rotate(var(--from, 2deg)) scale(.97); } }
+    .hero.paste { --from: -4deg; }
+    .rise { animation: rise .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 90ms); }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+    .grow .bar { animation: grow .55s var(--spring) both; animation-delay: calc(var(--d, 0) * 9ms + 250ms); }
+    @keyframes grow { from { transform: scaleY(0); } }
+    .s-up .pulse::after, .s-degraded .pulse::after, .s-down .pulse::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: currentColor; animation: beat 1.8s var(--ease) infinite; }
+    .s-down .pulse::after { animation-duration: .9s; }
+    @keyframes beat { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(3); opacity: 0; } }
+    .s-down .stamp { animation: shake .5s .9s both; }
+    @keyframes shake { 20%, 60% { transform: rotate(-3deg) translateX(-4px); } 40%, 80% { transform: rotate(-3deg) translateX(4px); } }
+    .stamp:active { transform: rotate(-3deg) scale(.94); }
+    .draw .line { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw 1.4s .35s var(--ease) forwards; }
+    .draw .area { opacity: 0; animation: fadein .8s 1.2s forwards; }
+    .draw .dot { opacity: 0; animation: fadein .3s 1.6s forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes fadein { to { opacity: 1; } }
+    .dot::after { animation: ring 2s 1.6s var(--ease) infinite; }
+    @keyframes ring { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(3.2); opacity: 0; } }
+    .ping.go .wave { animation: wave 1.1s var(--ease) infinite; }
+    .ping.go .wave:nth-child(2) { animation-delay: .35s; }
+    @keyframes wave { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(1.9); opacity: 0; } }
+    .pop { animation: pop .45s var(--spring); }
+    @keyframes pop { 0% { transform: scale(.6); opacity: 0; } }
   }
 </style>
 </head>
 <body>
 <main>
-  <header>
-    <a class="brand" href="./">Backrooms <span>Status</span></a>
-    <a class="open" href="https://backrooms-1k7.pages.dev">Open Backrooms &rarr;</a>
+  <header class="rise">
+    <a class="brand" href="./" aria-label="Backrooms status">
+      <img src="icon.png" alt="" width="42" height="42">
+      <div><b>Backrooms</b><small>status</small></div>
+    </a>
+    <a class="open" id="open" href="https://backrooms.up.railway.app"><span>Open Backrooms</span>
+      <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></a>
   </header>
 
-  <section id="hero" class="hero s-unknown fade" aria-live="polite">
-    <div class="hero-row">
-      <div class="icon" id="hero-icon"></div>
-      <div>
-        <h1 id="hero-title">Checking&hellip;</h1>
-        <p class="meta" id="hero-meta">Loading the latest check.</p>
+  <section id="hero" class="bill hero paste s-unknown" aria-live="polite">
+    <i class="tape l"></i><i class="tape r"></i>
+    <div>
+      <button class="stamp" id="stamp" type="button" title="Tap me"><span class="pulse"></span><span id="stamp-text">Checking</span></button>
+      <h1 id="hero-title">Checking&hellip;</h1>
+      <p class="meta" id="hero-meta">Loading the latest check.</p>
+    </div>
+    <div class="spark" id="spark" hidden>
+      <div class="spark-top">
+        <div class="spark-ms" id="spark-ms"></div>
+        <div class="spark-label">response time<br>last 4 hours</div>
       </div>
+      <div class="plot"><svg id="spark-svg" viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true"></svg><i class="dot" id="spark-dot"></i></div>
     </div>
   </section>
 
-  <section id="you" class="you fade" style="--i:1" aria-live="polite">
-    <span class="dot"></span>
-    <span id="you-text">Testing whether your device can reach Backrooms&hellip;</span>
-    <button id="you-again" type="button" hidden>Test again</button>
+  <section class="you rise" style="--i:2" aria-live="polite">
+    <button class="ping" id="ping" type="button" aria-label="Test your connection to Backrooms"><i class="wave"></i><i class="wave"></i>Ping</button>
+    <div class="you-text" id="you-text"><strong>Is it just you?</strong><span>Testing whether your device can reach Backrooms&hellip;</span></div>
   </section>
 
-  <h2 class="fade" style="--i:2">Systems <small id="range">Last 90 days</small></h2>
-  <section class="systems fade" style="--i:2" id="systems"></section>
+  <section class="stats rise" style="--i:3" id="stats" hidden>
+    <div class="stat"><b id="st-ship">&nbsp;</b><span id="st-ship-l">since the last update shipped</span></div>
+    <div class="stat"><b id="st-streak">&nbsp;</b><span id="st-streak-l">without an incident</span></div>
+    <div class="stat"><b id="st-up">&nbsp;</b><span>app uptime, last 30 days</span></div>
+  </section>
 
-  <h2 class="fade" style="--i:3">Past incidents</h2>
-  <section id="incidents" class="fade" style="--i:3"></section>
+  <h2 class="rise" style="--i:4">Systems <small id="range">Last 90 days</small></h2>
+  <section class="systems" id="systems"></section>
+
+  <h2 class="rise" style="--i:5">Past incidents</h2>
+  <section id="incidents" class="rise" style="--i:5"></section>
 
   <footer>
-    <p>A script checks Backrooms every 2 minutes, around the clock. This page can run a few minutes behind.</p>
-    <p>The check asks each server directly, so it doesn't use up any of Backrooms' daily Cloudflare requests.</p>
+    <p>A script checks Backrooms every 2 minutes, around the clock, from outside Railway where Backrooms runs. This page can run a few minutes behind.</p>
+    <p>Tap Ping to test your own connection. If it works here but not in the app, close the app and open it again.</p>
   </footer>
 </main>
 <div class="tip" id="tip" role="tooltip"></div>
@@ -153,11 +261,12 @@
 <script>
 (() => {
   const RAW = "https://raw.githubusercontent.com/codeclawd/backrooms-status/data/status.json";
-  const PROBE = "https://backrooms-1k7.pages.dev/sw.js"; // a static file: costs nothing against the daily cap
+  const APP = "https://backrooms.up.railway.app";
   const STALE_S = 12 * 60;
   const TZ = "America/Chicago";
   const local = ["localhost", "127.0.0.1"].includes(location.hostname);
   const src = (local && new URLSearchParams(location.search).get("data")) || RAW;
+  const calm = matchMedia("(prefers-reduced-motion: reduce)");
 
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kids) => {
@@ -168,17 +277,11 @@
     for (const kid of kids) if (kid != null) el.append(kid);
     return el;
   };
-  const ICONS = {
-    up: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10.5l3.5 3.5 7.5-8"/></svg>',
-    degraded: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M10 5v6"/><path d="M10 15h.01"/></svg>',
-    down: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/></svg>',
-    unknown: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 10h10"/></svg>',
-  };
   const LABEL = { up: "Working", degraded: "Trouble", down: "Down", unknown: "No data" };
+  const STAMP = { up: "All good", degraded: "Trouble", down: "Down", unknown: "No data" };
 
   const dayKey = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
   const fmtDay = (key) => new Date(key + "T12:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-  // Times use the same Central clock as the day headings, with the zone shown ("9:48 AM CDT").
   const fmtTime = (iso) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ, timeZoneName: "short" });
   const ago = (iso) => {
     const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
@@ -191,8 +294,15 @@
     const m = Math.max(1, Math.round((new Date(b) - new Date(a)) / 60000));
     return m < 60 ? m + " min" : Math.floor(m / 60) + " h " + (m % 60) + " min";
   };
+  // "3 h", "2 d", "45 min": the biggest unit that fits, for the stat counters.
+  const span = (ms) => {
+    const m = Math.max(0, ms / 60000);
+    if (m < 60) return [Math.floor(m), "min"];
+    if (m < 48 * 60) return [Math.floor(m / 60), m < 120 ? "hour" : "hours"];
+    return [Math.floor(m / 1440), "days"];
+  };
 
-  let data = null, state = "unknown", you = null;
+  let data = null, state = "unknown", you = null, youMs = null, drawn = false, grown = false;
 
   function lastDays(n) {
     // Step by calendar day from today's Central date (24-hour steps skip or repeat a day around DST changes).
@@ -201,6 +311,21 @@
     for (let i = n - 1; i >= 0; i--) out.push(new Date(Date.UTC(y, m - 1, d - i, 12)).toISOString().slice(0, 10));
     return out;
   }
+  const isStale = () => !data || (Date.now() - new Date(data.updated)) / 1000 > STALE_S;
+
+  // Numbers count up once, the first time they appear.
+  function countTo(el, value, unit, decimals = 0) {
+    const set = (v) => { el.innerHTML = ""; el.append(v.toFixed(decimals)); if (unit) el.append(h("span", { class: "unit", text: unit })); };
+    if (calm.matches || el.dataset.done === String(value)) return set(value);
+    el.dataset.done = String(value);
+    const t0 = performance.now();
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / 900);
+      set(value * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
 
   function renderHero() {
     const hero = $("hero");
@@ -208,53 +333,124 @@
     if (!data) {
       state = "unknown";
       title = "Can't load the status right now.";
-      meta = "Try again in a minute. If Backrooms works for you, it's fine.";
+      meta = "Try again in a minute, or tap Ping below to test Backrooms yourself.";
+    } else if (isStale()) {
+      state = "unknown";
+      title = "The status checker went quiet.";
+      meta = "No report for " + ago(data.updated).replace(" ago", "") + ". The checker runs separately from Backrooms, so Backrooms may be fine: tap Ping to check. Last report at " + fmtTime(data.updated) + ": " + data.message;
     } else {
-      const age = (Date.now() - new Date(data.updated)) / 1000;
-      if (age > STALE_S) {
-        state = "unknown";
-        title = "The status checker hasn't reported in " + ago(data.updated).replace(" ago", "") + ".";
-        meta = "It runs on the same home network as the servers, so this usually means Backrooms is down too. Last report at " + fmtTime(data.updated) + ": " + data.message
-      } else {
-        state = data.overall;
-        title = data.message;
-        meta = "Checked " + ago(data.updated) + " · checks every " + Math.round(data.every / 60) + " minutes";
-      }
+      state = data.overall;
+      title = data.message;
+      meta = "Checked " + ago(data.updated) + ". Checks every " + Math.round(data.every / 60) + " minutes.";
     }
-    hero.className = "hero s-" + state;
-    $("hero-icon").innerHTML = ICONS[state];
+    hero.className = hero.className.replace(/\bs-\w+/, "s-" + state);
+    $("stamp-text").textContent = STAMP[state];
     $("hero-title").textContent = title;
+    $("hero-title").classList.toggle("long", title.length > 40);
     $("hero-meta").textContent = meta;
     renderYou();
   }
 
-  function renderYou() {
-    const box = $("you"), text = $("you-text");
-    box.classList.toggle("ok", you === true);
-    box.classList.toggle("bad", you === false);
-    $("you-again").hidden = you === null;
-    if (you === null) { text.textContent = "Testing whether your device can reach Backrooms…"; return; }
-    if (state === "unknown") {
-      text.innerHTML = you ? "<strong>Your device can reach Backrooms' website.</strong> If the app won't load, the servers behind it may be down."
-        : "<strong>Your device can't reach Backrooms.</strong> Check your Wi-Fi or data, or try another network.";
-    } else if (you) {
-      text.innerHTML = state === "up" ? "<strong>Your device can reach Backrooms.</strong> If something still looks broken, close the app and open it again."
-        : "<strong>Your device can reach Backrooms.</strong> The problem is on Backrooms' side, not yours.";
-    } else {
-      text.innerHTML = state === "up" ? "<strong>Your device can't reach Backrooms, but it's working for everyone else.</strong> Check your Wi-Fi or data, or try another network. School Wi-Fi may block it."
-        : "<strong>Your device can't reach Backrooms.</strong> Backrooms is having trouble too, so it's probably not you.";
+  function renderSpark() {
+    const pts = (data?.latency || []).slice(-120);
+    const box = $("spark");
+    const answered = pts.filter((p) => p[1] != null);
+    box.hidden = answered.length < 2;
+    if (box.hidden) return;
+    const svg = $("spark-svg");
+    const t0 = pts[0][0], t1 = pts[pts.length - 1][0] || t0 + 1;
+    const max = Math.max(300, Math.ceil(Math.max(...answered.map((p) => p[1])) / 100) * 100);
+    const X = (t) => ((t - t0) / Math.max(1, t1 - t0)) * 300;
+    const Y = (ms) => 96 - (ms / max) * 88;
+    let d = "", gaps = "", pen = false, first = null, last = null;
+    for (const [t, ms] of pts) {
+      if (ms == null) { gaps += `<line class="gap" x1="${X(t)}" x2="${X(t)}" y1="10" y2="96"/>`; pen = false; continue; }
+      d += (pen ? "L" : "M") + X(t).toFixed(1) + " " + Y(ms).toFixed(1);
+      pen = true; first ??= [X(t), Y(ms)]; last = [X(t), Y(ms)];
     }
+    const area = d + `L${last[0].toFixed(1)} 100L${first[0].toFixed(1)} 100Z`;
+    svg.innerHTML = `<defs><linearGradient id="sparkfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f45d96" stop-opacity=".35"/><stop offset="1" stop-color="#f45d96" stop-opacity="0"/></linearGradient></defs>
+      <line class="base" x1="0" x2="300" y1="96" y2="96"/>${gaps}<path class="area" d="${area}"/><path class="line" d="${d}"/>`;
+    const len = svg.querySelector(".line").getTotalLength?.() || 600;
+    svg.style.setProperty("--len", Math.ceil(len * 3));
+    if (!drawn) { box.classList.add("draw"); drawn = true; }
+    // The live end of the line: an HTML dot, so it stays round while the SVG stretches.
+    const dot = $("spark-dot");
+    dot.style.left = (last[0] / 3) + "%";
+    dot.style.top = last[1] + "%";
+    const now = pts[pts.length - 1][1];
+    const ms = $("spark-ms");
+    ms.innerHTML = "";
+    if (now == null) ms.append("no answer");
+    else { ms.append(String(now)); ms.append(h("small", { text: "ms" })); }
   }
 
-  async function testYou() {
-    you = null; renderYou();
+  function renderStats() {
+    const box = $("stats");
+    box.hidden = !data;
+    if (!data) return;
+    if (data.version_since) {
+      const [n, u] = span(Date.now() - new Date(data.version_since));
+      countTo($("st-ship"), n, u);
+      $("st-ship-l").innerHTML = "";
+      $("st-ship-l").append("since the last update shipped (", h("code", { text: (data.version || "").slice(0, 7) }), ")");
+    }
+    const incs = data.incidents || [];
+    const lastInc = incs[incs.length - 1];
+    if (lastInc && !lastInc.end) {
+      $("st-streak").textContent = "Now";
+      $("st-streak-l").textContent = "an incident is going on";
+    } else {
+      const since = new Date(lastInc ? lastInc.end : data.since || data.updated);
+      const [n, u] = span(Date.now() - since);
+      countTo($("st-streak"), n, u);
+      $("st-streak-l").textContent = lastInc ? "without an incident" : "without an incident, since checks began";
+    }
+    let ok = 0, total = 0;
+    for (const d of lastDays(30)) { const c = data.days?.[d]?.app; if (c) { ok += c[0]; total += c[1]; } }
+    if (total) countTo($("st-up"), Math.floor((ok / total) * 1000) / 10, "%", 1);
+    else $("st-up").textContent = "-";
+  }
+
+  function renderYou() {
+    const box = $("you-text");
+    box.replaceChildren();
+    const say = (head, rest, ms) => {
+      const s = h("strong", {}, head);
+      if (ms != null) s.append(" ", h("span", { class: "ms", text: ms + " ms" }));
+      box.append(s, h("span", { text: rest }));
+    };
+    if (you === null) return say("Is it just you?", "Testing whether your device can reach Backrooms…");
+    if (you) {
+      if (state === "up") say("You're through in", "Your device reaches Backrooms. If something still looks broken, close the app and open it again.", youMs);
+      else if (state === "unknown") say("You're through in", "Your device reaches Backrooms right now.", youMs);
+      else say("You're through in", "Your device reaches Backrooms. The trouble is on Backrooms' side, not yours.", youMs);
+    } else {
+      if (state === "up") say("You can't reach it.", "Backrooms works for everyone else. Check your Wi-Fi or data, or try another network. School Wi-Fi may block it.");
+      else say("You can't reach it.", "Backrooms is having trouble too, so it's probably not you.");
+    }
+    box.firstChild.classList.add("pop");
+  }
+
+  async function hit() {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
     try {
-      await fetch(PROBE + "?t=" + Date.now(), { mode: "no-cors", cache: "no-store", signal: ctrl.signal });
+      const t0 = performance.now();
+      await fetch(APP + "/api/version?ping=" + Date.now(), { mode: "no-cors", cache: "no-store", signal: ctrl.signal });
+      return Math.round(performance.now() - t0);
+    } finally { clearTimeout(t); }
+  }
+  async function testYou() {
+    const btn = $("ping");
+    btn.disabled = true; btn.classList.add("go");
+    you = null; renderYou();
+    try {
+      await hit(); // the first trip pays for the connection setup; time the second
+      youMs = await hit();
       you = true;
-    } catch { you = false; }
-    clearTimeout(t);
+    } catch { you = false; youMs = null; }
+    btn.disabled = false; btn.classList.remove("go");
     renderYou();
   }
 
@@ -268,38 +464,31 @@
     const box = $("systems");
     box.replaceChildren();
     if (!data) return;
-    const n = innerWidth < 640 ? 30 : 90;
+    const n = innerWidth < 680 ? 30 : 90;
     $("range").textContent = "Last " + n + " days";
     const days = lastDays(n);
-    const stale = (Date.now() - new Date(data.updated)) / 1000 > STALE_S;
-    for (const c of data.components) {
+    const stale = isStale();
+    data.components.forEach((c, idx) => {
       const st = stale || !c.state ? "unknown" : c.state;
       let ok = 0, total = 0;
       const bars = h("div", { class: "bars" });
-      for (const d of days) {
+      days.forEach((d, i) => {
         const cell = data.days?.[d]?.[c.key];
         if (cell) { ok += cell[0]; total += cell[1]; }
         const b = h("button", { class: "bar " + barClass(cell), type: "button", "aria-label": fmtDay(d) });
-        b.dataset.day = d; b.dataset.key = c.key;
+        b.dataset.day = d; b.dataset.key = c.key; b.style.setProperty("--d", i + idx * 8);
         bars.append(b);
-      }
+      });
       const pct = total ? (Math.floor((ok / total) * 10000) / 100).toFixed(2) + "% uptime" : "No data yet";
-      const row = h("div", { class: "sys" },
+      const row = h("div", { class: "bill sys" + (grown ? "" : " paste grow"), style: "--i:" + (idx + 4) },
         h("div", { class: "sys-head" },
           h("div", {}, h("div", { class: "sys-name", text: c.name }), h("div", { class: "sys-about", text: c.about })),
           h("span", { class: "tag " + st, text: LABEL[st] })),
         bars,
         h("div", { class: "scale" }, h("span", { text: n + " days ago" }), h("b", { text: pct }), h("span", { text: "Today" })));
-      if (c.key === "capacity" && data.capacity?.used != null) {
-        const used = data.capacity.used, cap = data.capacity.cap;
-        const m = h("div", { class: "meter " + (stale ? "" : st) }, h("i", { style: "width:" + Math.min(100, used / cap * 100).toFixed(1) + "%" }));
-        row.insertBefore(m, bars);
-        row.insertBefore(h("div", { class: "scale" },
-          h("span", { text: used.toLocaleString() + " of " + cap.toLocaleString() + " used today" }),
-          h("span", { text: "Resets " + new Date(new Date().setUTCHours(24, 0, 0, 0)).toLocaleTimeString("en-US", { hour: "numeric", timeZone: TZ, timeZoneName: "short" }) })), bars);
-      }
       box.append(row);
-    }
+    });
+    grown = true;
   }
 
   function renderIncidents() {
@@ -323,7 +512,7 @@
         sec.append(h("div", { class: "inc" },
           h("div", { class: "inc-title" }, h("span", { text: inc.title }),
             h("span", { class: "tag " + (ongoing ? inc.worst : "up"), text: ongoing ? "Ongoing" : "Resolved" })),
-          h("div", { class: "inc-when", text: fmtTime(inc.start) + (ongoing ? " – now" : " – " + fmtTime(inc.end)) + " · " + dur(inc.start, ongoing ? Date.now() : end) + (parts ? " · " + parts : "") })));
+          h("div", { class: "inc-when", text: fmtTime(inc.start) + (ongoing ? " to now" : " to " + fmtTime(inc.end)) + ", " + dur(inc.start, ongoing ? Date.now() : end) + (parts ? ". " + parts : "") })));
       }
       list.append(sec);
     };
@@ -337,21 +526,16 @@
     }
   }
 
-  // One tooltip for every bar: hover on desktop, tap on phones.
   const tip = $("tip");
-  function showTip(b) {
-    const cell = data?.days?.[b.dataset.day]?.[b.dataset.key];
-    let txt = fmtDay(b.dataset.day) + " · ";
-    if (!cell || !cell[1]) txt += "No data";
-    else {
-      const down = (cell[1] - cell[0]) * Math.round((data.every || 120) / 60);
-      txt += (Math.floor((cell[0] / cell[1]) * 10000) / 100) + "%" + (down ? " · about " + down + " min down" : " · no downtime");
-    }
-    tip.textContent = txt;
-    const r = b.getBoundingClientRect();
+  function showTip(bar) {
+    const cell = data?.days?.[bar.dataset.day]?.[bar.dataset.key];
+    tip.textContent = fmtDay(bar.dataset.day) + "  " + (cell && cell[1]
+      ? (cell[0] === cell[1] ? "no problems" : (cell[1] - cell[0]) + " of " + cell[1] + " checks failed")
+      : "no checks");
+    const r = bar.getBoundingClientRect();
     tip.classList.add("on");
     const w = tip.offsetWidth;
-    tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
+    tip.style.left = Math.min(innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2)) + "px";
     tip.style.top = (r.top - tip.offsetHeight - 8) + "px";
   }
   const hideTip = () => tip.classList.remove("on");
@@ -361,7 +545,26 @@
   document.addEventListener("focusout", hideTip);
   addEventListener("scroll", hideTip, { passive: true });
 
-  function render() { renderHero(); renderSystems(); renderIncidents(); }
+  // Tap the stamp: a burst of spray paint in the wall's inks.
+  $("stamp").addEventListener("click", (e) => {
+    if (calm.matches) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const inks = state === "down" ? ["#d6455d", "#f45d96", "#101010"] : state === "degraded" ? ["#d39a2a", "#f45d96", "#101010"] : ["#f45d96", "#2a3cc4", "#3ecf5e", "#101010"];
+    for (let i = 0; i < 26; i++) {
+      const s = 4 + Math.random() * 12, a = Math.random() * Math.PI * 2, dist = 40 + Math.random() * 140;
+      const el = h("i", { class: "drop" });
+      el.style.cssText += `width:${s}px;height:${s}px;background:${inks[i % inks.length]}`;
+      document.body.append(el);
+      el.animate([
+        { transform: `translate(${cx}px,${cy}px) scale(.3)`, opacity: 1 },
+        { transform: `translate(${cx + Math.cos(a) * dist}px,${cy + Math.sin(a) * dist * .7 + 40}px) scale(1)`, opacity: 1, offset: .7 },
+        { transform: `translate(${cx + Math.cos(a) * dist}px,${cy + Math.sin(a) * dist * .7 + 90}px) scale(.9)`, opacity: 0 },
+      ], { duration: 900 + Math.random() * 500, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }).onfinish = () => el.remove();
+    }
+  });
+
+  function render() { renderHero(); renderSpark(); renderStats(); renderSystems(); renderIncidents(); }
 
   async function load() {
     try {
@@ -373,13 +576,13 @@
     render();
   }
 
-  $("you-again").onclick = testYou;
+  $("ping").onclick = testYou;
   let lastW = innerWidth;
-  addEventListener("resize", () => { if ((lastW < 640) !== (innerWidth < 640)) { lastW = innerWidth; renderSystems(); } });
+  addEventListener("resize", () => { renderSpark(); if ((lastW < 680) !== (innerWidth < 680)) { lastW = innerWidth; renderSystems(); } });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { load(); testYou(); } });
   load(); testYou();
   setInterval(load, 60000);
-  setInterval(renderHero, 15000);
+  setInterval(() => { renderHero(); renderStats(); }, 15000);
 })();
 </script>
 </body>
